@@ -1,0 +1,124 @@
+# Project name: keeps these containers separate from the Assignment 1 ones
+# (Docker Desktop shows them grouped under "esd-a2").
+name: esd-a2
+
+services:
+  quest-app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - FAULT_DELAY_MS=${FAULT_DELAY_MS:-0}
+      - FAULT_EVERY_N=${FAULT_EVERY_N:-0}
+      # Rate limit for POST /quests: this many calls per client IP per window.
+      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-30}
+      - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-10}
+      # The shared quest database (quest_core/store.py), kept on the questdata volume.
+      - QUEST_DB_PATH=/data/quests.db
+    volumes:
+      - questdata:/data
+    # Docker keeps the app's stdout (our JSON logs) in a json-file on disk.
+    # These options cap it at 3 files of 10 MB each, so old container logs get rotated out.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # The gRPC service (Part B): a separate process/container, built from the same
+  # image as quest-app but running the gRPC server. It mounts the same questdata
+  # volume, so both services read and write the same quests.
+  quest-grpc:
+    build: .
+    command: ["python", "-m", "grpc_service.server"]
+    ports:
+      - "50051:50051"
+      - "9101:9101"   # /metrics for Prometheus (also handy to open in a browser)
+    environment:
+      - QUEST_DB_PATH=/data/quests.db
+      - GRPC_PORT=50051
+      - METRICS_PORT=9101
+    volumes:
+      - questdata:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      # Provisioning: the Prometheus data source and the dashboards are loaded
+      # from these folders every time Grafana starts.
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false      # local demo only, no login needed
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m    # keep memory use small
+    ports:
+      - "9200:9200"
+    volumes:
+      # Named volume: the stored logs survive container restarts.
+      - esdata:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.0
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.0
+    user: root
+    command: filebeat -e --strict.perms=false
+    volumes:
+      - ./logging/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      # Where Docker stores each container's log files:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      # Lets Filebeat look up container names:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - elasticsearch
+
+volumes:
+  esdata:
+  # Named volume for the quest database: quests survive container restarts,
+  # and the gRPC service (Part B) mounts the same volume to share them.
+  questdata:
