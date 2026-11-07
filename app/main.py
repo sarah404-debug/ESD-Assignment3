@@ -4,6 +4,7 @@ import os
 import threading
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 from fastapi import Depends, FastAPI, Header, Request, Response
@@ -15,8 +16,19 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.routing import Match
 from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
+from grpc_service.server import start_grpc_server
 from quest_core import quest_metrics, rules
 from quest_core.jsonlog import get_logger, pick_request_id, request_id_var
+
+
+# One replica answers both HTTP and gRPC: the gRPC server starts with the app, and
+# stops with it (`docker compose stop` sends SIGTERM; in-flight calls get up to 5 s).
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    grpc_server = start_grpc_server()
+    yield
+    grpc_server.stop(grace=5).wait()
+
 
 # title/version/description appear at the top of the OpenAPI spec (/openapi.json)
 # and the interactive docs page (/docs).
@@ -24,6 +36,7 @@ app = FastAPI(
     title="Quest App API",
     version="2.0.0",
     description="Get small real-life side quests and record whether you completed, skipped or abandoned them.",
+    lifespan=lifespan,
 )
 
 # Serve the small one-page UI (app/static/index.html) at /ui.

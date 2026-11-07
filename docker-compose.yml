@@ -1,13 +1,16 @@
-# Project name: keeps these containers separate from the Assignment 1 ones
-# (Docker Desktop shows them grouped under "esd-a2").
-name: esd-a2
+# Project name: keeps these containers separate from the earlier assignments
+# (Docker Desktop shows them grouped under "esd-a3").
+name: esd-a3
 
 services:
+  # One container answers both HTTP (8000) and gRPC (50051).
   quest-app:
     build: .
     ports:
       - "8000:8000"
+      - "50051:50051"
     environment:
+      - GRPC_PORT=50051
       - FAULT_DELAY_MS=${FAULT_DELAY_MS:-0}
       - FAULT_EVERY_N=${FAULT_EVERY_N:-0}
       # Rate limit for POST /quests: this many calls per client IP per window.
@@ -19,27 +22,6 @@ services:
       - questdata:/data
     # Docker keeps the app's stdout (our JSON logs) in a json-file on disk.
     # These options cap it at 3 files of 10 MB each, so old container logs get rotated out.
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # The gRPC service (Part B): a separate process/container, built from the same
-  # image as quest-app but running the gRPC server. It mounts the same questdata
-  # volume, so both services read and write the same quests.
-  quest-grpc:
-    build: .
-    command: ["python", "-m", "grpc_service.server"]
-    ports:
-      - "50051:50051"
-      - "9101:9101"   # /metrics for Prometheus (also handy to open in a browser)
-    environment:
-      - QUEST_DB_PATH=/data/quests.db
-      - GRPC_PORT=50051
-      - METRICS_PORT=9101
-    volumes:
-      - questdata:/data
     logging:
       driver: json-file
       options:
@@ -119,6 +101,5 @@ services:
 
 volumes:
   esdata:
-  # Named volume for the quest database: quests survive container restarts,
-  # and the gRPC service (Part B) mounts the same volume to share them.
+  # Named volume for the quest database: quests survive container restarts.
   questdata:

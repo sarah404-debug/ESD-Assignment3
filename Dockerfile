@@ -12,6 +12,5 @@ COPY app ./app
 
 EXPOSE 8000 50051
 
-# Default: the HTTP app. The quest-grpc service in docker-compose.yml runs the
-# same image with a different command (the gRPC server).
+# One process answers both: the app serves HTTP on 8000 and starts the gRPC server on 50051.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

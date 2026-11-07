@@ -1,30 +1,26 @@
 """gRPC server for the Quest App: QuestService.ResolveQuest.
 
-This is the gRPC version of HTTP PATCH /quests/{instance_id}. It runs in its
-own process/container, but uses the same business rules (quest_core/rules.py)
-and the same database (quest_core/store.py) as the HTTP app. It does NOT call
-the HTTP app.
+This is the gRPC version of HTTP PATCH /quests/{instance_id}. It runs inside
+the same process as the HTTP app (app/main.py starts it), so one replica answers
+both HTTP and gRPC. It uses the same business rules (quest_core/rules.py) and the
+same database (quest_core/store.py), and it does NOT call the HTTP app.
 
-Run from the project folder:
-    python -m grpc_service.server
-Ports: GRPC_PORT (default 50051) for gRPC, METRICS_PORT (default 9101) for
-Prometheus (/metrics).
+Port: GRPC_PORT (default 50051). The metrics recorded here are served by the HTTP
+app's /metrics, because both share one process.
 """
 import logging
 import os
-import signal
 import time
 from concurrent import futures
 
 import grpc
-from prometheus_client import Counter, Gauge, Histogram, start_http_server
+from prometheus_client import Counter, Gauge, Histogram
 
 from questpb import quest_pb2, quest_pb2_grpc
 from quest_core import quest_metrics, rules
 from quest_core.jsonlog import get_logger, pick_request_id, request_id_var
 
 GRPC_PORT = int(os.environ.get("GRPC_PORT", "50051"))
-METRICS_PORT = int(os.environ.get("METRICS_PORT", "9101"))  # Prometheus scrapes /metrics here
 
 logger = get_logger("quest-grpc")
 
@@ -192,7 +188,8 @@ class RequestLoggingInterceptor(grpc.ServerInterceptor):
         )
 
 
-def serve():
+def start_grpc_server():
+    """Start the gRPC server on its own background threads and return it."""
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=10),
         interceptors=[RequestLoggingInterceptor()],
@@ -201,15 +198,4 @@ def serve():
     server.add_insecure_port(f"[::]:{GRPC_PORT}")
     server.start()
     logger.info(f"gRPC server listening on port {GRPC_PORT}", extra={"event": "server_started"})
-
-    # A small HTTP server (in a background thread) for Prometheus: /metrics.
-    start_http_server(METRICS_PORT)
-    logger.info(f"metrics on http://0.0.0.0:{METRICS_PORT}/metrics", extra={"event": "metrics_started"})
-
-    # `docker compose stop` sends SIGTERM: finish in-flight calls (up to 5 s), then exit.
-    signal.signal(signal.SIGTERM, lambda *_: server.stop(grace=5))
-    server.wait_for_termination()
-
-
-if __name__ == "__main__":
-    serve()
+    return server
