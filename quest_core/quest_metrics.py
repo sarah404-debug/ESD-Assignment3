@@ -13,10 +13,20 @@ registers it, so it is exported once.
 """
 import time
 
-from prometheus_client import REGISTRY, Counter, Summary
+from prometheus_client import REGISTRY, Counter, Gauge, Summary
 from prometheus_client.core import GaugeMetricFamily
 
 from quest_core import rules, store
+from quest_core.replica import REPLICA_ID
+
+# GAUGE (always 1): a name tag saying which replica (A, B, C) this /metrics page
+# belongs to. Its only label is the replica letter, a small fixed set.
+quest_replica_info = Gauge(
+    "quest_replica_info",
+    "Which replica this process is (value is always 1)",
+    ["replica"],
+)
+quest_replica_info.labels(replica=REPLICA_ID).set(1)
 
 # COUNTER: quests resolved, one counter per outcome (names kept from Assignment 1).
 quests_completed_total = Counter(

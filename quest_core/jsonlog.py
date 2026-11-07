@@ -2,7 +2,8 @@
 
 Every log line is one JSON object written to stdout (Docker captures stdout,
 Filebeat ships it to Elasticsearch). Both services use the same fields, so
-their logs can be searched together in Kibana; "service" tells them apart.
+their logs can be searched together in Kibana; "service" tells them apart,
+and "replica" says which copy (A, B, C) wrote the line.
 
 request_id lives in a context variable, so any log line written while
 handling a request automatically carries that request's ID.
@@ -14,6 +15,8 @@ import re
 import sys
 import uuid
 from datetime import datetime, timezone
+
+from quest_core.replica import REPLICA_ID
 
 request_id_var = contextvars.ContextVar("request_id", default="-")
 
@@ -46,6 +49,7 @@ class JsonFormatter(logging.Formatter):
         entry = {
             "time": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
             "service": self.service,
+            "replica": REPLICA_ID,
             "severity": record.levelname,
             "message": record.getMessage(),
             "request_id": request_id_var.get(),

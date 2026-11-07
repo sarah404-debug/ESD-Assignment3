@@ -3,14 +3,19 @@
 name: esd-a3
 
 services:
-  # One container answers both HTTP (8000) and gRPC (50051).
+  # Each container answers both HTTP (8000) and gRPC (50051).
+  # Docker Compose scaling runs three copies: esd-a3-quest-app-1, -2 and -3,
+  # which name themselves replica A, B and C (quest_core/replica.py).
+  # No "ports:" here: three copies can't all use port 8000 on the laptop. The
+  # copies are only reachable inside Docker's network (Envoy will be the way in).
   quest-app:
     build: .
-    ports:
-      - "8000:8000"
-      - "50051:50051"
+    deploy:
+      replicas: 3
     environment:
       - GRPC_PORT=50051
+      # How a copy finds its own number (and so its letter) in Docker's DNS.
+      - REPLICA_DNS_PREFIX=esd-a3-quest-app-
       - FAULT_DELAY_MS=${FAULT_DELAY_MS:-0}
       - FAULT_EVERY_N=${FAULT_EVERY_N:-0}
       # Rate limit for POST /quests: this many calls per client IP per window.

@@ -19,6 +19,7 @@ from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTEN
 from grpc_service.server import start_grpc_server
 from quest_core import quest_metrics, rules
 from quest_core.jsonlog import get_logger, pick_request_id, request_id_var
+from quest_core.replica import REPLICA_ID
 
 
 # One replica answers both HTTP and gRPC: the gRPC server starts with the app, and
@@ -26,6 +27,7 @@ from quest_core.jsonlog import get_logger, pick_request_id, request_id_var
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     grpc_server = start_grpc_server()
+    logger.info(f"replica {REPLICA_ID} started", extra={"event": "replica_started"})
     yield
     grpc_server.stop(grace=5).wait()
 
