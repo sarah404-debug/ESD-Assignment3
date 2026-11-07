@@ -306,6 +306,8 @@ async def track_requests(request: Request, call_next):
         })
 
     response.headers["X-Request-ID"] = request_id
+    # Which replica answered (A, B, C): lets a client, and Envoy's access log, see it.
+    response.headers["X-Replica"] = REPLICA_ID
     return response
 
 # ── Endpoints ───────────────────────────────────────────────

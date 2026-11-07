@@ -1,0 +1,109 @@
+# Envoy: the one front door for all clients.
+# It listens on 8000 (HTTP) and 50051 (gRPC) and forwards each request to a
+# replica of quest-app.
+#
+# Part A: everything goes to replica A only (esd-a3-quest-app-1). Replicas B
+# and C keep running, but are not in Envoy's list of destinations yet.
+
+admin:
+  # Envoy's own admin page: http://localhost:9901 (stats, destinations and
+  # whether each one is healthy). Prometheus will read Envoy's metrics here later.
+  address:
+    socket_address: { address: 0.0.0.0, port_value: 9901 }
+
+static_resources:
+  # ── Listeners: the doors clients connect to ─────────────────────
+  listeners:
+    # HTTP clients (browser, curl, scripts) connect here.
+    - name: http_listener
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 8000 }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: http_ingress
+                # Request correlation: keep the caller's X-Request-ID (or make one
+                # if it sent none) and pass it on, so Envoy and the replica
+                # tag the request with the same ID.
+                generate_request_id: true
+                preserve_external_request_id: true
+                route_config:
+                  virtual_hosts:
+                    - name: quest_http
+                      domains: ["*"]
+                      routes:
+                        - match: { prefix: "/" }
+                          route: { cluster: quest_http }
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+    # gRPC clients connect here. gRPC runs on HTTP/2, and Envoy reads it as
+    # HTTP/2 (not as plain TCP), so it sees every call on its own. That matters
+    # in Part C, when calls are spread across replicas one by one.
+    - name: grpc_listener
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 50051 }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: grpc_ingress
+                codec_type: HTTP2
+                # Same request-ID handling as HTTP (gRPC metadata x-request-id
+                # is an HTTP/2 header).
+                generate_request_id: true
+                preserve_external_request_id: true
+                route_config:
+                  virtual_hosts:
+                    - name: quest_grpc
+                      domains: ["*"]
+                      routes:
+                        - match: { prefix: "/" }
+                          route:
+                            cluster: quest_grpc
+                            # Use the deadline the gRPC client sends (grpc-timeout)
+                            # instead of Envoy's own 15 s default.
+                            timeout: 0s
+                            max_stream_duration:
+                              grpc_timeout_header_max: 0s
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  # ── Clusters: where Envoy may send requests ─────────────────────
+  clusters:
+    # HTTP destinations. Part A: replica A only.
+    - name: quest_http
+      type: STRICT_DNS            # look the replica's name up in Docker's DNS
+      lb_policy: ROUND_ROBIN      # take turns (with one destination: always A)
+      load_assignment:
+        cluster_name: quest_http
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: esd-a3-quest-app-1, port_value: 8000 }   # replica A
+
+    # gRPC destinations. Part A: replica A only. Envoy talks HTTP/2 to the
+    # replicas too, because gRPC needs it.
+    - name: quest_grpc
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: quest_grpc
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: esd-a3-quest-app-1, port_value: 50051 }   # replica A

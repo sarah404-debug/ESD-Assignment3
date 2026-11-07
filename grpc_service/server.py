@@ -19,6 +19,7 @@ from prometheus_client import Counter, Gauge, Histogram
 from questpb import quest_pb2, quest_pb2_grpc
 from quest_core import quest_metrics, rules
 from quest_core.jsonlog import get_logger, pick_request_id, request_id_var
+from quest_core.replica import REPLICA_ID
 
 GRPC_PORT = int(os.environ.get("GRPC_PORT", "50051"))
 
@@ -148,7 +149,8 @@ class RequestLoggingInterceptor(grpc.ServerInterceptor):
         def logged_behavior(request, context):
             request_id = pick_request_id(incoming_id)
             request_id_var.set(request_id)
-            context.send_initial_metadata((("x-request-id", request_id),))
+            # Send back the request ID and which replica (A, B, C) is answering.
+            context.send_initial_metadata((("x-request-id", request_id), ("x-replica", REPLICA_ID)))
             start = time.perf_counter()
             code = grpc.StatusCode.OK
             grpc_server_in_flight.labels(grpc_method=method).inc()

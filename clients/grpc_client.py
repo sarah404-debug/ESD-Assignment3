@@ -44,7 +44,8 @@ def create_quest_over_http(http_url, request_id):
     with urllib.request.urlopen(request, timeout=5) as response:
         quest = json.loads(response.read())
         echoed = response.headers.get("X-Request-ID")
-    print(f"(HTTP POST /quests created quest {quest['instance_id']}, X-Request-ID={echoed})")
+        replica = response.headers.get("X-Replica")
+    print(f"(HTTP POST /quests created quest {quest['instance_id']}, X-Request-ID={echoed}, replica={replica})")
     return quest["instance_id"]
 
 
@@ -87,9 +88,10 @@ def main():
             sys.exit(1)
 
     took_ms = (time.time() - start) * 1000
-    echoed = dict(call.initial_metadata()).get("x-request-id")
+    metadata = dict(call.initial_metadata())
+    echoed = metadata.get("x-request-id")
     quest = response.quest
-    print(f"OK      status=OK  ({took_ms:.0f} ms)  server x-request-id={echoed}")
+    print(f"OK      status=OK  ({took_ms:.0f} ms)  server x-request-id={echoed}  replica={metadata.get('x-replica')}")
     print(f"        quest {quest.instance_id}: {quest.status} "
           f"({quest.category}, {quest.difficulty}) \"{quest.text}\"")
     print(f"        changed={response.changed}"

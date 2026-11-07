@@ -3,6 +3,20 @@
 name: esd-a3
 
 services:
+  # Envoy: the front door. Clients use localhost:8000 (HTTP) and
+  # localhost:50051 (gRPC); Envoy forwards each request to a quest-app replica
+  # (envoy/envoy.yaml says which ones).
+  envoy:
+    image: envoyproxy/envoy:v1.31.2
+    ports:
+      - "8000:8000"     # HTTP
+      - "50051:50051"   # gRPC
+      - "9901:9901"     # Envoy's admin page (stats and destinations)
+    volumes:
+      - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+    depends_on:
+      - quest-app
+
   # Each container answers both HTTP (8000) and gRPC (50051).
   # Docker Compose scaling runs three copies: esd-a3-quest-app-1, -2 and -3,
   # which name themselves replica A, B and C (quest_core/replica.py).
