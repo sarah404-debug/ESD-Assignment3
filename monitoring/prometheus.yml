@@ -2,9 +2,30 @@ global:
   scrape_interval: 5s
 
 scrape_configs:
+  # The three replicas, each scraped directly by its own container name (not
+  # through Envoy's balanced route). Every series from a replica gets a
+  # replica label (A, B or C), so dashboards can show each replica separately.
   - job_name: 'quest-app'
+    # The app also exports quest_replica_info{replica="A"}; honor_labels keeps
+    # that label as-is instead of renaming it (it always matches anyway).
+    honor_labels: true
     static_configs:
-      - targets: ['quest-app:8000']
+      - targets: ['esd-a3-quest-app-1:8000']
+        labels:
+          replica: 'A'
+      - targets: ['esd-a3-quest-app-2:8000']
+        labels:
+          replica: 'B'
+      - targets: ['esd-a3-quest-app-3:8000']
+        labels:
+          replica: 'C'
+
+  # Envoy's own metrics (requests, active requests, destination health),
+  # served on its admin port.
+  - job_name: 'envoy'
+    metrics_path: /stats/prometheus
+    static_configs:
+      - targets: ['envoy:9901']
 
   - job_name: 'node-exporter'
     static_configs:
