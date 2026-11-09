@@ -1,0 +1,4 @@
+label,interface,run_id,start_utc,end_utc,target_rps,actual_rps,sent,succeeded,failed,error_rate_pct,client_p50_ms,client_p95_ms,share_A_pct,share_B_pct,share_C_pct,failures
+baseline-A-only,http,lt650374,2026-11-09 12:14:19,12:15:19,20,20.00,1200,1200,0,0.00,15.5,34.0,100.0,0.0,0.0,
+baseline-A-only,http,lt5b2523,2026-11-09 12:48:10,12:49:10,20,20.00,1200,1200,0,0.00,23.2,33.6,100.0,0.0,0.0,
+baseline-A-only,grpc,lt1473b7,2026-11-09 12:49:20,12:50:20,20,20.00,1200,1200,0,0.00,7.0,9.4,100.0,0.0,0.0,
