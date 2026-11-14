@@ -34,3 +34,10 @@ def _find_replica_id():
 
 
 REPLICA_ID = _find_replica_id()
+
+# Part D, experiment 2: make ONE replica slow. SLOW_REPLICA names it (e.g. "B");
+# that replica waits SLOW_DELAY_MS before handling every HTTP request and gRPC
+# call. The other replicas, and every replica when SLOW_REPLICA is not set,
+# get 0 (no delay).
+SLOW_DELAY_SECONDS = (int(os.environ.get("SLOW_DELAY_MS", "0")) / 1000
+                      if os.environ.get("SLOW_REPLICA") == REPLICA_ID else 0)

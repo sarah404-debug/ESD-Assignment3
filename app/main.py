@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import math
 import os
@@ -19,7 +20,7 @@ from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTEN
 from grpc_service.server import start_grpc_server
 from quest_core import quest_metrics, rules
 from quest_core.jsonlog import get_logger, pick_request_id, request_id_var
-from quest_core.replica import REPLICA_ID
+from quest_core.replica import REPLICA_ID, SLOW_DELAY_SECONDS
 
 
 # One replica answers both HTTP and gRPC: the gRPC server starts with the app, and
@@ -267,6 +268,10 @@ async def track_requests(request: Request, call_next):
     in_flight.inc()
 
     try:
+        if SLOW_DELAY_SECONDS:
+            # Part D experiment 2: this replica was made slow (SLOW_REPLICA).
+            # asyncio.sleep waits without blocking other requests.
+            await asyncio.sleep(SLOW_DELAY_SECONDS)
         response = await call_next(request)
         status_code = response.status_code
     except Exception:

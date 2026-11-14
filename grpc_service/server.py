@@ -19,7 +19,7 @@ from prometheus_client import Counter, Gauge, Histogram
 from questpb import quest_pb2, quest_pb2_grpc
 from quest_core import quest_metrics, rules
 from quest_core.jsonlog import get_logger, pick_request_id, request_id_var
-from quest_core.replica import REPLICA_ID
+from quest_core.replica import REPLICA_ID, SLOW_DELAY_SECONDS
 
 GRPC_PORT = int(os.environ.get("GRPC_PORT", "50051"))
 
@@ -155,6 +155,8 @@ class RequestLoggingInterceptor(grpc.ServerInterceptor):
             code = grpc.StatusCode.OK
             grpc_server_in_flight.labels(grpc_method=method).inc()
             try:
+                if SLOW_DELAY_SECONDS:
+                    time.sleep(SLOW_DELAY_SECONDS)  # Part D experiment 2: this replica was made slow
                 return inner(request, context)
             except Exception:
                 # context.code() is set if the handler called context.abort(...).
@@ -192,8 +194,10 @@ class RequestLoggingInterceptor(grpc.ServerInterceptor):
 
 def start_grpc_server():
     """Start the gRPC server on its own background threads and return it."""
+    # 32 threads: enough that a slowed replica (Part D experiment 2) can hold
+    # several 1 s calls at once without new calls waiting for a free thread.
     server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=10),
+        futures.ThreadPoolExecutor(max_workers=32),
         interceptors=[RequestLoggingInterceptor()],
     )
     quest_pb2_grpc.add_QuestServiceServicer_to_server(QuestService(), server)

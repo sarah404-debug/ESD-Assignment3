@@ -34,6 +34,10 @@ services:
       - GRPC_PORT=50051
       # How a copy finds its own number (and so its letter) in Docker's DNS.
       - REPLICA_DNS_PREFIX=esd-a3-quest-app-
+      # Part D experiment 2: make one replica slow, e.g. SLOW_REPLICA=B and
+      # SLOW_DELAY_MS=1000 (off when SLOW_REPLICA is empty).
+      - SLOW_REPLICA=${SLOW_REPLICA:-}
+      - SLOW_DELAY_MS=${SLOW_DELAY_MS:-0}
       - FAULT_DELAY_MS=${FAULT_DELAY_MS:-0}
       - FAULT_EVERY_N=${FAULT_EVERY_N:-0}
       # Rate limit for POST /quests: this many calls per client IP per window.
