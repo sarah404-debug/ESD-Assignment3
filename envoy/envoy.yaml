@@ -2,8 +2,9 @@
 # It listens on 8000 (HTTP) and 50051 (gRPC) and forwards each request to a
 # replica of quest-app.
 #
-# Part A: everything goes to replica A only (esd-a3-quest-app-1). Replicas B
-# and C keep running, but are not in Envoy's list of destinations yet.
+# Part A sent everything to replica A only. Part C (now): A, B and C are all
+# destinations, with equal-weight round robin (A, B, C, A, B, C, ...), for both
+# HTTP and gRPC.
 
 admin:
   # Envoy's own admin page: http://localhost:9901 (stats, destinations and
@@ -124,10 +125,10 @@ static_resources:
 
   # ── Clusters: where Envoy may send requests ─────────────────────
   clusters:
-    # HTTP destinations. Part A: replica A only.
+    # HTTP destinations: replicas A, B and C, equal weight (each counts 1).
     - name: quest_http
-      type: STRICT_DNS            # look the replica's name up in Docker's DNS
-      lb_policy: ROUND_ROBIN      # take turns (with one destination: always A)
+      type: STRICT_DNS            # look each replica's name up in Docker's DNS
+      lb_policy: ROUND_ROBIN      # take turns: A, B, C, A, B, C, ...
       load_assignment:
         cluster_name: quest_http
         endpoints:
@@ -135,9 +136,17 @@ static_resources:
               - endpoint:
                   address:
                     socket_address: { address: esd-a3-quest-app-1, port_value: 8000 }   # replica A
+              - endpoint:
+                  address:
+                    socket_address: { address: esd-a3-quest-app-2, port_value: 8000 }   # replica B
+              - endpoint:
+                  address:
+                    socket_address: { address: esd-a3-quest-app-3, port_value: 8000 }   # replica C
 
-    # gRPC destinations. Part A: replica A only. Envoy talks HTTP/2 to the
-    # replicas too, because gRPC needs it.
+    # gRPC destinations: replicas A, B and C, equal weight. Envoy talks HTTP/2
+    # to the replicas too, because gRPC needs it. Because the gRPC listener is
+    # HTTP/2 (not plain TCP), Envoy picks a replica for every call, even though
+    # the client sends all its calls over one connection.
     - name: quest_grpc
       type: STRICT_DNS
       lb_policy: ROUND_ROBIN
@@ -153,3 +162,9 @@ static_resources:
               - endpoint:
                   address:
                     socket_address: { address: esd-a3-quest-app-1, port_value: 50051 }   # replica A
+              - endpoint:
+                  address:
+                    socket_address: { address: esd-a3-quest-app-2, port_value: 50051 }   # replica B
+              - endpoint:
+                  address:
+                    socket_address: { address: esd-a3-quest-app-3, port_value: 50051 }   # replica C
