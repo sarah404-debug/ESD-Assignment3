@@ -14,6 +14,7 @@ import time
 from concurrent import futures
 
 import grpc
+from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 from prometheus_client import Counter, Gauge, Histogram
 
 from questpb import quest_pb2, quest_pb2_grpc
@@ -141,6 +142,8 @@ class RequestLoggingInterceptor(grpc.ServerInterceptor):
         handler = continuation(handler_call_details)
         if handler is None or handler.unary_unary is None:
             return handler  # unknown method, or a streaming one (we have none)
+        if handler_call_details.method.startswith("/grpc.health.v1.Health/"):
+            return handler  # Envoy's health checks (every 2 s): not logged or counted
 
         method = handler_call_details.method.rsplit("/", 1)[-1]  # e.g. "ResolveQuest"
         incoming_id = dict(handler_call_details.invocation_metadata).get("x-request-id")
@@ -201,6 +204,13 @@ def start_grpc_server():
         interceptors=[RequestLoggingInterceptor()],
     )
     quest_pb2_grpc.add_QuestServiceServicer_to_server(QuestService(), server)
+    # Standard gRPC health service (grpc.health.v1.Health/Check), used by Envoy's
+    # active health checks (Part D experiment 3). It answers SERVING while the
+    # server runs; a stopped replica does not answer at all.
+    health_servicer = health.HealthServicer()
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+    for service in ("", "quest.v1.QuestService"):
+        health_servicer.set(service, health_pb2.HealthCheckResponse.SERVING)
     server.add_insecure_port(f"[::]:{GRPC_PORT}")
     server.start()
     logger.info(f"gRPC server listening on port {GRPC_PORT}", extra={"event": "server_started"})

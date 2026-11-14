@@ -252,8 +252,9 @@ def _route_template(scope):
 # ── Middleware ──────────────────────────────────────────────
 @app.middleware("http")
 async def track_requests(request: Request, call_next):
-    # Don't count or log Prometheus scraping /metrics itself.
-    if request.url.path == "/metrics":
+    # Don't count or log Prometheus scraping /metrics itself, or Envoy's active
+    # health checks (Part D experiment 3: GET / every 2 s, sent as "Envoy/HC").
+    if request.url.path == "/metrics" or request.headers.get("user-agent") == "Envoy/HC":
         return await call_next(request)
 
     # Every request gets an ID; all log lines for this request will carry it.

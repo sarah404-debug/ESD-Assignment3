@@ -23,10 +23,16 @@ Examples (run from the project folder with the venv's Python):
     python scripts/fixed_rate_load.py grpc --rate 20 --duration 60 --label baseline
 
 At the end it prints the results and adds one line to results/runs.csv.
+
+Failure and recovery (Part D experiment 3): stop a replica's container during the
+run and start it again, then print a second-by-second timeline of successes,
+failures and which replicas answered (also saved to results/timeline-*.csv):
+    python scripts/fixed_rate_load.py http --duration 90 --label failure --stop-container esd-a3-quest-app-2 --stop-at 20 --start-at 50
 """
 import argparse
 import csv
 import json
+import subprocess
 import sys
 import threading
 import time
@@ -108,6 +114,11 @@ def main():
     parser.add_argument("--pool", type=int, default=20, help="quests to prepare before the run")
     parser.add_argument("--http-url", default="http://127.0.0.1:8000", help="Envoy's HTTP address")
     parser.add_argument("--grpc-target", default="localhost:50051", help="Envoy's gRPC address")
+    # Part D experiment 3 (failure and recovery): stop one replica's container
+    # during the run and start it again, at fixed seconds into the run.
+    parser.add_argument("--stop-container", help="container to stop and restart, e.g. esd-a3-quest-app-2 (B)")
+    parser.add_argument("--stop-at", type=float, default=20, help="seconds into the run to stop it (default 20)")
+    parser.add_argument("--start-at", type=float, default=50, help="seconds into the run to start it (default 50)")
     args = parser.parse_args()
 
     run_id = "lt" + uuid.uuid4().hex[:6]
@@ -120,15 +131,20 @@ def main():
 
     lock = threading.Lock()
     latencies, outcomes, replicas = [], Counter(), Counter()
+    timeline = {}  # second of the run -> Counter of "ok", "failed", "A", "B", "C"
     done = threading.Event()
     finished = [0]
+    start_ref = [0.0]  # set just before the first send
 
     def record(planned, outcome, replica):
         took = time.perf_counter() - planned
         with lock:
             outcomes[str(outcome)] += 1
+            second = timeline.setdefault(int(planned - start_ref[0]), Counter())
+            second["ok" if outcome in (200, "OK") else "failed"] += 1
             if replica:
                 replicas[replica] += 1
+                second[replica] += 1
             if outcome in (200, "OK"):
                 latencies.append(took)
             finished[0] += 1
@@ -166,8 +182,30 @@ def main():
 
         future.add_done_callback(on_done)
 
+    events = []  # (seconds into the run, what happened) for the stop/start of a container
+
+    def container_ip(name):
+        result = subprocess.run(["docker", "inspect", "-f",
+                                 "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", name],
+                                capture_output=True, text=True)
+        return result.stdout.strip() or "-"
+
+    def stop_and_start():
+        for at, action in ((args.stop_at, "stop"), (args.start_at, "start")):
+            time.sleep(max(0.0, start_ref[0] + at - time.perf_counter()))
+            began = time.perf_counter() - start_ref[0]
+            ip_before = container_ip(args.stop_container)
+            subprocess.run(["docker", action, args.stop_container], capture_output=True)
+            ended = time.perf_counter() - start_ref[0]
+            events.append((began, f"docker {action} {args.stop_container} issued "
+                                  f"(finished at {ended:.1f}s; IP before {ip_before}, after "
+                                  f"{container_ip(args.stop_container)})"))
+
     started_at = datetime.now(timezone.utc)
     start = time.perf_counter()
+    start_ref[0] = start
+    if args.stop_container:
+        threading.Thread(target=stop_and_start, daemon=True).start()
     late = 0.0
     for i in range(total):
         planned = start + i / args.rate
@@ -225,6 +263,28 @@ def main():
             ";".join(f"{o}={n}" for o, n in outcomes.items() if o not in ("200", "OK")),
         ])
     print(f"saved to       {RESULTS_CSV.relative_to(ROOT)}")
+
+    if args.stop_container:
+        # Second-by-second timeline (by planned send time) for the failure run.
+        timeline_csv = RESULTS_CSV.parent / f"timeline-{args.label}-{args.interface}-{run_id}.csv"
+        with timeline_csv.open("w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["second", "succeeded", "failed", "A", "B", "C"])
+            for second in sorted(timeline):
+                c = timeline[second]
+                writer.writerow([second, c["ok"], c["failed"], c["A"], c["B"], c["C"]])
+        print(f"timeline       {timeline_csv.relative_to(ROOT)}")
+        print()
+        for at, what in events:
+            print(f"at {at:5.1f}s     {what}")
+        failed_seconds = [s for s in sorted(timeline) if timeline[s]["failed"]]
+        if failed_seconds:
+            print(f"failures       {sum(timeline[s]['failed'] for s in failed_seconds)} requests, sent between "
+                  f"second {failed_seconds[0]} and second {failed_seconds[-1]}")
+        print("second by second (succeeded / failed / A B C):")
+        for second in sorted(timeline):
+            c = timeline[second]
+            print(f"  {second:3d}s  {c['ok']:3d} / {c['failed']:2d}   A {c['A']:2d}  B {c['B']:2d}  C {c['C']:2d}")
 
 
 if __name__ == "__main__":

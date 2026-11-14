@@ -71,6 +71,10 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      # View-only access without login (localhost demo): lets a headless browser
+      # save dashboard panels as pictures for the report. Editing still needs admin.
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
     volumes:
       # Provisioning: the Prometheus data source and the dashboards are loaded
       # from these folders every time Grafana starts.
