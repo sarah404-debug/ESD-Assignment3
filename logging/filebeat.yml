@@ -11,17 +11,21 @@ processors:
   - add_docker_metadata:
       host: "unix:///var/run/docker.sock"
 
-  # Only keep logs from the quest-app service (HTTP and gRPC) of this
-  # project ("esd-a3"). Docker Compose labels every container with its project
-  # and service name (the dots in label names become underscores here).
+  # Only keep logs from the quest-app replicas (HTTP and gRPC) and Envoy (its
+  # access log) of this project ("esd-a3"). Docker Compose labels every
+  # container with its project and service name (the dots in label names
+  # become underscores here).
   - drop_event:
       when:
         not:
           and:
             - equals:
                 container.labels.com_docker_compose_project: "esd-a3"
-            - equals:
-                container.labels.com_docker_compose_service: "quest-app"
+            - or:
+                - equals:
+                    container.labels.com_docker_compose_service: "quest-app"
+                - equals:
+                    container.labels.com_docker_compose_service: "envoy"
 
   # The app writes one JSON object per line. Parse it into fields under "app.*".
   # (Under a prefix so our field names, like "service" and "event", don't clash
@@ -34,17 +38,18 @@ processors:
       target: "app"
       add_error_key: true
 
-  # Drop plain-text lines (Uvicorn's own startup/access lines) - they aren't JSON.
+  # Drop plain-text lines (Uvicorn's and Envoy's own startup/info lines) - they aren't JSON.
   - drop_event:
       when:
         not:
           has_fields: ["app.service"]
 
-  # Use the time the app wrote in the log as the event's @timestamp.
+  # Use the time the app (or Envoy) wrote in the log as the event's @timestamp.
   - timestamp:
       field: app.time
       layouts:
-        - "2006-01-02T15:04:05.999999Z07:00"
+        - "2006-01-02T15:04:05.999999Z07:00"   # replicas
+        - "2006-01-02T15:04:05.999Z"           # Envoy (START_TIME, UTC)
       ignore_failure: true
 
 output.elasticsearch:

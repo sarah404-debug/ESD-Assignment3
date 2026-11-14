@@ -72,3 +72,22 @@ search shows the whole task, and `app.service` tells the services apart.
 
 Add the columns `app.service`, `app.message`, `app.status` and `app.grpc_code`
 to see the sequence at a glance.
+
+## Assignment 3: Envoy's event together with the replica's event
+
+Envoy writes one JSON access-log line per request (`app.service : "envoy"`,
+`app.event : "envoy_access"`), with the request ID, the replica it picked
+(`app.replica`, from the replica's `X-Replica` answer) and the replica's
+address (`app.upstream_host`). The replicas log the same request ID, so one
+search on `app.request_id` returns both lines. The fixed-rate test client
+gives request number i of a run the ID `<run id>-<i>` (for example `lt5b2523-7`).
+
+| KQL (Kibana Discover, data view `quest-app-logs`) | What it shows |
+|---|---|
+| `app.request_id : "<http run id>-7"` | HTTP: Envoy's line (`app.listener : http`) and the replica's `request completed` line |
+| `app.request_id : "<grpc run id>-7"` | gRPC: Envoy's line (`app.listener : grpc`) and the replica's `rpc completed` line |
+| `app.service : "envoy" and app.replica : "A"` | Every request Envoy sent to replica A |
+| `app.service : "envoy" and not app.replica : *` | Requests Envoy could not hand to any replica |
+
+Add the columns `app.service`, `app.replica`, `app.listener`, `app.upstream_host`,
+`app.message`, `app.status` and `app.grpc_code` to see the pair side by side.

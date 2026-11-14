@@ -29,6 +29,30 @@ static_resources:
                 # tag the request with the same ID.
                 generate_request_id: true
                 preserve_external_request_id: true
+                # Access log: one JSON line per request on stdout (Docker keeps it,
+                # Filebeat ships it to Elasticsearch). The field names match the
+                # replicas' logs, so one search on request_id finds both lines.
+                # replica comes from the X-Replica header the replica answers with;
+                # upstream_host is the replica's address Envoy picked.
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          time: "%START_TIME%"
+                          service: "envoy"
+                          event: "envoy_access"
+                          listener: "http"
+                          request_id: "%REQ(X-REQUEST-ID)%"
+                          method: "%REQ(:METHOD)%"
+                          path: "%REQ(:PATH)%"
+                          status: "%RESPONSE_CODE%"
+                          response_flags: "%RESPONSE_FLAGS%"
+                          duration_ms: "%DURATION%"
+                          upstream_cluster: "%UPSTREAM_CLUSTER%"
+                          upstream_host: "%UPSTREAM_HOST%"
+                          replica: "%RESP(X-REPLICA)%"
                 route_config:
                   virtual_hosts:
                     - name: quest_http
@@ -58,6 +82,28 @@ static_resources:
                 # is an HTTP/2 header).
                 generate_request_id: true
                 preserve_external_request_id: true
+                # Access log: same format as the HTTP listener, plus the gRPC
+                # status code. The x-replica metadata is an HTTP/2 response header.
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          time: "%START_TIME%"
+                          service: "envoy"
+                          event: "envoy_access"
+                          listener: "grpc"
+                          request_id: "%REQ(X-REQUEST-ID)%"
+                          method: "%REQ(:METHOD)%"
+                          path: "%REQ(:PATH)%"
+                          status: "%RESPONSE_CODE%"
+                          grpc_code: "%GRPC_STATUS%"
+                          response_flags: "%RESPONSE_FLAGS%"
+                          duration_ms: "%DURATION%"
+                          upstream_cluster: "%UPSTREAM_CLUSTER%"
+                          upstream_host: "%UPSTREAM_HOST%"
+                          replica: "%RESP(X-REPLICA)%"
                 route_config:
                   virtual_hosts:
                     - name: quest_grpc
