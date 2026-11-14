@@ -4,16 +4,20 @@ name: esd-a3
 
 services:
   # Envoy: the front door. Clients use localhost:8000 (HTTP) and
-  # localhost:50051 (gRPC); Envoy forwards each request to a quest-app replica
-  # (envoy/envoy.yaml says which ones).
+  # localhost:50051 (gRPC); Envoy forwards each request to a quest-app replica.
+  # Which setup file it uses: envoy/envoy.yaml (normal: equal round robin)
+  # unless ENVOY_CONFIG names another file in envoy/ for a Part D experiment,
+  # e.g. ENVOY_CONFIG=envoy-weighted.yaml. Clearing ENVOY_CONFIG and running
+  # `docker compose up -d envoy` again restores the normal setup.
   envoy:
     image: envoyproxy/envoy:v1.31.2
+    command: ["-c", "/etc/envoy/${ENVOY_CONFIG:-envoy.yaml}"]
     ports:
       - "8000:8000"     # HTTP
       - "50051:50051"   # gRPC
       - "9901:9901"     # Envoy's admin page (stats and destinations)
     volumes:
-      - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./envoy:/etc/envoy:ro
     depends_on:
       - quest-app
 
