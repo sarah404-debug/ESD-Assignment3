@@ -123,6 +123,22 @@ static_resources:
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 
+    # Part C comparison only: gRPC through a PLAIN TCP PROXY on port 50052.
+    # Envoy just passes the connection's bytes through, so it never sees the
+    # separate gRPC calls inside. It picks a replica once per connection, and
+    # a gRPC client sends every call over one connection: all calls go to one
+    # replica. (The real gRPC door is 50051, which routes every call.)
+    - name: grpc_tcp_proxy_listener
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 50052 }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.tcp_proxy
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: grpc_tcp_proxy
+                cluster: quest_grpc_tcp
+
   # ── Clusters: where Envoy may send requests ─────────────────────
   clusters:
     # HTTP destinations: replicas A, B and C, equal weight (each counts 1).
@@ -157,6 +173,25 @@ static_resources:
             http2_protocol_options: {}
       load_assignment:
         cluster_name: quest_grpc
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: esd-a3-quest-app-1, port_value: 50051 }   # replica A
+              - endpoint:
+                  address:
+                    socket_address: { address: esd-a3-quest-app-2, port_value: 50051 }   # replica B
+              - endpoint:
+                  address:
+                    socket_address: { address: esd-a3-quest-app-3, port_value: 50051 }   # replica C
+
+    # Destinations for the plain TCP proxy above (Part C comparison): the same
+    # three replicas' gRPC ports, round robin per CONNECTION.
+    - name: quest_grpc_tcp
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: quest_grpc_tcp
         endpoints:
           - lb_endpoints:
               - endpoint:

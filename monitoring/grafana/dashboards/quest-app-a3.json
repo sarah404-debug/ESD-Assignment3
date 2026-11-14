@@ -685,6 +685,218 @@
       }
     },
     {
+      "type": "bargauge",
+      "title": "HTTP: share over the whole selected time range (exact run share)",
+      "description": "Each replica's requests over the whole time range chosen at the top right, divided by all replicas together: increase(...[$__range]). Pick a range that covers one run to read that run's exact share (it is not affected by the 1-minute window).",
+      "id": 19,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * sum by (replica) (increase(http_requests_total{method=\"GET\",endpoint=\"/quests/{instance_id}\"}[$__range])) / ignoring(replica) group_left sum(increase(http_requests_total{method=\"GET\",endpoint=\"/quests/{instance_id}\"}[$__range]))",
+          "legendFormat": "{{replica}}",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "noValue": "no traffic",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^A( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^B( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^C( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "gRPC: share over the whole selected time range (exact run share)",
+      "description": "Each replica's requests over the whole time range chosen at the top right, divided by all replicas together: increase(...[$__range]). Pick a range that covers one run to read that run's exact share (it is not affected by the 1-minute window).",
+      "id": 20,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * sum by (replica) (increase(grpc_server_handled_total{grpc_method=\"ResolveQuest\"}[$__range])) / ignoring(replica) group_left sum(increase(grpc_server_handled_total{grpc_method=\"ResolveQuest\"}[$__range]))",
+          "legendFormat": "{{replica}}",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "noValue": "no traffic",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^A( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^B( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^C( .*)?$"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
       "type": "timeseries",
       "title": "HTTP: active requests, per replica",
       "description": "Requests being handled right now (a gauge: up when a request starts, down when it ends), sampled every 5 s when Prometheus scrapes.",
@@ -695,7 +907,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 22,
+        "y": 27,
         "w": 12,
         "h": 8
       },
@@ -797,7 +1009,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 22,
+        "y": 27,
         "w": 12,
         "h": 8
       },
@@ -899,7 +1111,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 30,
+        "y": 35,
         "w": 12,
         "h": 8
       },
@@ -1010,7 +1222,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 30,
+        "y": 35,
         "w": 12,
         "h": 8
       },
@@ -1121,7 +1333,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 43,
         "w": 12,
         "h": 8
       },
@@ -1222,7 +1434,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 38,
+        "y": 43,
         "w": 12,
         "h": 8
       },
@@ -1319,7 +1531,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 46,
+        "y": 51,
         "w": 24,
         "h": 1
       },
@@ -1336,7 +1548,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 47,
+        "y": 52,
         "w": 12,
         "h": 8
       },
@@ -1436,7 +1648,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 47,
+        "y": 52,
         "w": 12,
         "h": 8
       },
@@ -1549,7 +1761,7 @@
       "description": "Envoy's own view of a failing replica (Part D experiment 3). A stopped replica cannot count its own errors, so these come from Envoy: envoy_cluster_health_check_failure (active health checks that failed) and envoy_cluster_upstream_cx_connect_fail (requests whose connection to a replica failed), rate over 1 min.",
       "gridPos": {
         "x": 0,
-        "y": 55,
+        "y": 60,
         "w": 24,
         "h": 8
       },

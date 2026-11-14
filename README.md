@@ -67,6 +67,7 @@ and `x-replica: A`, `B` or `C`.
 |---|---|
 | App through Envoy (HTTP, Swagger at `/docs`, UI at `/ui`) | http://localhost:8000 |
 | gRPC through Envoy (`QuestService.ResolveQuest`) | `localhost:50051` |
+| gRPC through a plain TCP proxy (Part C comparison only) | `localhost:50052` |
 | Envoy admin (stats, `/clusters` shows each destination's health) | http://localhost:9901 |
 | Prometheus targets | http://localhost:9090/targets |
 | Grafana dashboard "Quest App A3" | http://localhost:3000/d/quest-app-a3 (view without login; admin / admin to edit) |
@@ -131,6 +132,13 @@ venv\Scripts\python scripts\fixed_rate_load.py grpc --label roundrobin
 Expected: about 33 % each. The gRPC listener is an HTTP/2 connection manager,
 so Envoy routes every call on its own although the client uses one connection.
 
+Comparison: the same gRPC test through Envoy's plain TCP proxy (port 50052).
+Envoy only sees one connection, so it picks one replica for all calls:
+```
+venv\Scripts\python scripts\fixed_rate_load.py grpc --label roundrobin-tcp-proxy --grpc-target localhost:50052
+```
+Expected: 100 % on one replica (Envoy admin: `tcp.grpc_tcp_proxy.downstream_cx_total` is 1).
+
 ### Experiment 1: weighted round robin A:B:C = 2:1:1
 ```
 set ENVOY_CONFIG=envoy-weighted.yaml
@@ -182,7 +190,9 @@ run: `docker start esd-a3-quest-app-2`. Then run the recovery commands.
 - **Grafana** dashboard `quest-app-a3`: for HTTP `GET /quests/{id}` (left) and
   gRPC `ResolveQuest` (right), per replica: requests per second, share of
   traffic (red line at 33.3 %), active requests, p50/p95 response time and
-  errors by status, all over a **1 minute** window; plus Envoy's requests per
+  errors by status, all over a **1 minute** window; each replica's share over
+  the whole selected time range (`increase(...[$__range])`, for reading one
+  run's share); plus Envoy's requests per
   destination group, healthy destinations, and failed health checks /
   connections.
 - **Logs:** each replica logs JSON with `service`, `replica` and `request_id`;

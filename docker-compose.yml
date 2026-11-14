@@ -15,6 +15,7 @@ services:
     ports:
       - "8000:8000"     # HTTP
       - "50051:50051"   # gRPC
+      - "50052:50052"   # gRPC through a plain TCP proxy (Part C comparison only)
       - "9901:9901"     # Envoy's admin page (stats and destinations)
     volumes:
       - ./envoy:/etc/envoy:ro
